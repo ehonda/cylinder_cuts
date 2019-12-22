@@ -1,0 +1,7 @@
+resolver: lts-14.17
+
+packages:
+- .
+
+extra-deps:
+- numeric-tools-0.2.0.1@sha256:dbf0191b3495570694b32a3c6f336da427008c550ea8753b5ca485af8bcf2985
