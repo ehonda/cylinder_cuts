@@ -1,7 +1,7 @@
 module Lib where
 
 import Data.Maybe (fromMaybe)
-import Numeric.Tools.Integration
+import Numeric.GSL.Integration
 import Test.LeanCheck
 import Text.PrettyPrint
 
@@ -117,12 +117,12 @@ volumeFormula p = (r^2/c_h) * ((rho h_0) - (rho h_L) +
 
 -- Comparison Formula <-> Numeric
 ----------------------------------------------------
-numericVolume :: 
-    (QuadParam -> (Double, Double) -> (Double -> Double) -> QuadRes)
-    -> CylinderParams
-    -> QuadRes
-numericVolume f p = f defQuad (0, len) (a . h)
+type GSLResult = (Double, Double)   -- (Result, Error)
+
+gslVolume :: CylinderParams -> GSLResult
+gslVolume p = integrateQNG prec (a . h) 0 len
     where
+        prec = 1e-9
         len = parL p
         r = parR p
         h_0 = parH0 p
@@ -134,50 +134,32 @@ numericVolume f p = f defQuad (0, len) (a . h)
         a :: Double -> Double
         a = areaFunction r
 
-rombergVolume :: CylinderParams -> QuadRes
-rombergVolume = numericVolume quadRomberg
-
-trapezoidVolume :: CylinderParams -> QuadRes
-trapezoidVolume = numericVolume quadTrapezoid
-        
-simpsonVolume :: CylinderParams -> QuadRes
-simpsonVolume = numericVolume quadSimpson
-
-resutsDoc :: CylinderParams -> Double -> QuadRes -> Doc
-resutsDoc p formula estimate = vcat
+gslResultsDoc :: CylinderParams -> Double -> GSLResult -> Doc
+gslResultsDoc p formula (estimate, error) = vcat
     [ pDoc, fDoc, eDoc, dDoc ]
     where
         pDoc = paramsDoc p
-            
+
         fDoc = capIndent
             "Formula result:"
             [ eqDoc "V" $ show formula ]
-            
+
         eDoc = capIndent
             "Numeric Integration result:"
-            [ eqDoc "V" $ fromMaybe ("Integration failed") $
-                fmap show $ quadRes estimate
-            , eqDoc "Best Estimate" $ show $
-                quadBestEst estimate
-            , eqDoc "Estimated Precision" $ show $
-                quadPrecEst estimate
-            , eqDoc "Number of Iterations" $ show $
-                quadNIter estimate
-            ]
-            
-        dDoc = capIndent
-            "Difference Formula - Best Estimate:"
-            [ eqDoc "V_f - V_e" $ show $ formula - 
-                quadBestEst estimate
+            [ eqDoc "V" $ show estimate
+            , eqDoc "Error" $ show error
             ]
 
-compareFormulaToNumeric :: CylinderParams -> IO ()
-compareFormulaToNumeric p = do
-    putStrLn $ render $ resutsDoc p formula estimate
+        dDoc = capIndent
+            "Difference Formula - Best Estimate:"
+            [ eqDoc "V_f - V_e" $ show $ formula - estimate ]
+
+compareFormulaToGSL :: CylinderParams -> IO ()
+compareFormulaToGSL p = 
+    putStrLn $ render $ gslResultsDoc p formula gsl
     where
         formula = volumeFormula p
-        estimate = rombergVolume p
-        
+        gsl = gslVolume p
 
 -- LeanCheck
 ----------------------------------------------------
@@ -187,27 +169,13 @@ instance Listable CylinderParams where
 withinTolerance :: Double -> Double -> Double -> Bool
 withinTolerance delta x y = abs (x - y) < delta
 
-prop_VolumeWithinTolerance :: Double -> 
+prop_VolumeWithinToleranceGSL :: Double -> 
     CylinderParams -> Bool
-prop_VolumeWithinTolerance delta p =
+prop_VolumeWithinToleranceGSL delta p =
     withinTolerance delta formula estimate
     where
         formula = volumeFormula p
-        estimate = quadBestEst $ rombergVolume p
+        (estimate, _) = gslVolume p
 
-{--        
-Unsuccessful LeanCheck:
-
-Problem with the numeric integrations:
-
-q = CylinderParams {parL = 0.4, parR = 1.5, parH0 = 0.0, parHL = 3.0}
-
-gives NaN, but
-
-q = CylinderParams {parL = 0.40000001, parR = 1.5, parH0 = 0.0, parHL = 3.0}
-
-works just fine
-
---}
-test0 = checkFor 10000 $ prop_VolumeWithinTolerance 1e-8
-test1 = checkFor 100000 $ prop_VolumeWithinTolerance 1e-8
+test0 = checkFor 10000 $ prop_VolumeWithinToleranceGSL 1e-8
+test1 = checkFor 100000 $ prop_VolumeWithinToleranceGSL 1e-8
