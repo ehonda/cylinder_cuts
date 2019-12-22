@@ -1,6 +1,5 @@
 module Lib where
 
-import Data.Maybe (fromMaybe)
 import Numeric.GSL.Integration
 import Test.LeanCheck
 import Text.PrettyPrint
@@ -177,5 +176,5 @@ prop_VolumeWithinToleranceGSL delta p =
         formula = volumeFormula p
         (estimate, _) = gslVolume p
 
-test0 = checkFor 10000 $ prop_VolumeWithinToleranceGSL 1e-8
-test1 = checkFor 100000 $ prop_VolumeWithinToleranceGSL 1e-8
+test0 = checkFor 10000 $ prop_VolumeWithinToleranceGSL 1e-9
+test1 = checkFor 100000 $ prop_VolumeWithinToleranceGSL 1e-9
